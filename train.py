@@ -290,17 +290,9 @@ def main():
     # Create the loss in two steps:
     # 1. Compute all pairwise distances according to the specified metric.
     # 2. For each anchor along the first dimension, compute its loss.
-
-    # dists = loss.cdist(endpoints['emb'], endpoints['emb'], metric=args.metric)
-    # losses, train_top1, prec_at_k, _, neg_dists, pos_dists = loss.LOSS_CHOICES[args.loss](
-    #     dists, pids, args.margin, batch_precision_at_k=args.batch_k-1)
     
     #TODO: Investigate other outputs
     loss_mean = loss.LOSS_CHOICES[args.loss](pids, endpoints['emb'], args.margin)
-
-    # Count the number of active entries, and compute the total batch loss.
-    # num_active = tf.reduce_su÷\m(tf.cast(tf.greater(losses, 1e-5), tf.float32))
-    # loss_mean = tf.reduce_mean(losses)
 
     # Some logging for tensorboard.
     # tf.summary.histogram('loss_distribution', losses)

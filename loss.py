@@ -313,7 +313,7 @@ def batch_semihard(embeddings, pids, margin, batch_precision_at_k=None):
         A scalar which indicates the loss in this batch.
     """
     with tf.name_scope("batch_semi_hard"):
-        loss, dist = triplet_semihard_loss(pids, embeddings, margin)
+        loss, dist = tf.contrib.losses.metric_learning.triplet_semihard_loss(pids, embeddings, margin)
 
     if batch_precision_at_k is None:
         return loss

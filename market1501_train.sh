@@ -17,7 +17,7 @@ EXP_ROOT=$1 ; shift
 
 python train.py \
     --train_set data/market1501_train.csv \
-    --model_name resnet_v1_50 \
+    --model_name mobilenet_v1_1_224 \
     --image_root $IMAGE_ROOT \
     --initial_checkpoint $INIT_CHECKPT \
     --experiment_root $EXP_ROOT \
