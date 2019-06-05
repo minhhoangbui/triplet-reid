@@ -292,7 +292,7 @@ def main():
     # 2. For each anchor along the first dimension, compute its loss.
     
     #TODO: Investigate other outputs
-    loss_mean = loss.LOSS_CHOICES[args.loss](pids, endpoints['emb'], args.margin)
+    loss_mean = loss.LOSS_CHOICES[args.loss](endpoints['emb'], pids, args.margin)
 
     # Some logging for tensorboard.
     # tf.summary.histogram('loss_distribution', losses)
