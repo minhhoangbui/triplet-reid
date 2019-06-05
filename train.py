@@ -290,23 +290,27 @@ def main():
     # Create the loss in two steps:
     # 1. Compute all pairwise distances according to the specified metric.
     # 2. For each anchor along the first dimension, compute its loss.
-    dists = loss.cdist(endpoints['emb'], endpoints['emb'], metric=args.metric)
-    losses, train_top1, prec_at_k, _, neg_dists, pos_dists = loss.LOSS_CHOICES[args.loss](
-        dists, pids, args.margin, batch_precision_at_k=args.batch_k-1)
+
+    # dists = loss.cdist(endpoints['emb'], endpoints['emb'], metric=args.metric)
+    # losses, train_top1, prec_at_k, _, neg_dists, pos_dists = loss.LOSS_CHOICES[args.loss](
+    #     dists, pids, args.margin, batch_precision_at_k=args.batch_k-1)
+    
+    #TODO: Investigate other outputs
+    loss_mean = loss.LOSS_CHOICES[args.loss](pids, endpoints['emb'], args.margin)
 
     # Count the number of active entries, and compute the total batch loss.
-    num_active = tf.reduce_sum(tf.cast(tf.greater(losses, 1e-5), tf.float32))
-    loss_mean = tf.reduce_mean(losses)
+    # num_active = tf.reduce_su÷\m(tf.cast(tf.greater(losses, 1e-5), tf.float32))
+    # loss_mean = tf.reduce_mean(losses)
 
     # Some logging for tensorboard.
-    tf.summary.histogram('loss_distribution', losses)
+    # tf.summary.histogram('loss_distribution', losses)
     tf.summary.scalar('loss', loss_mean)
-    tf.summary.scalar('batch_top1', train_top1)
-    tf.summary.scalar('batch_prec_at_{}'.format(args.batch_k-1), prec_at_k)
-    tf.summary.scalar('active_count', num_active)
-    tf.summary.histogram('embedding_dists', dists)
-    tf.summary.histogram('embedding_pos_dists', pos_dists)
-    tf.summary.histogram('embedding_neg_dists', neg_dists)
+    # tf.summary.scalar('batch_top1', train_top1)
+    # tf.summary.scalar('batch_prec_at_{}'.format(args.batch_k-1), prec_at_k)
+    # tf.summary.scalar('active_count', num_active)
+    # tf.summary.histogram('embedding_dists', dists)
+    # tf.summary.histogram('embedding_pos_dists', pos_dists)
+    # tf.summary.histogram('embedding_neg_dists', neg_dists)
     tf.summary.histogram('embedding_lengths',
                          tf.norm(endpoints['emb_raw'], axis=1))
 
@@ -385,9 +389,9 @@ def main():
 
                 # Compute gradients, update weights, store logs!
                 start_time = time.time()
-                _, summary, step, b_prec_at_k, b_embs, b_loss, b_fids = \
+                _, summary, step, b_embs, b_loss, b_fids = \
                     sess.run([train_op, merged_summary, global_step,
-                              prec_at_k, endpoints['emb'], losses, fids])
+                              endpoints['emb'], loss_mean, fids])
                 elapsed_time = time.time() - start_time
 
                 # Compute the iteration speed and add it to the summary.
@@ -402,15 +406,12 @@ def main():
 
                 # Do a huge print out of the current progress.
                 seconds_todo = (args.train_iterations - step) * elapsed_time
-                log.info('iter:{:6d}, loss min|avg|max: {:.3f}|{:.3f}|{:6.3f}, '
+                log.info('iter:{:6d}, loss: {:.3f}, '
                          'batch-p@{}: {:.2%}, ETA: {} ({:.2f}s/it)'.format(
-                             step,
-                             float(np.min(b_loss)),
-                             float(np.mean(b_loss)),
-                             float(np.max(b_loss)),
-                             args.batch_k-1, float(b_prec_at_k),
-                             timedelta(seconds=int(seconds_todo)),
-                             elapsed_time))
+                            step,
+                            float(b_loss),
+                            timedelta(seconds=int(seconds_todo)),
+                            elapsed_time))
                 sys.stdout.flush()
                 sys.stderr.flush()
 
