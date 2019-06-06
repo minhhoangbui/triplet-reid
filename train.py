@@ -399,7 +399,7 @@ def main():
                 # Do a huge print out of the current progress.
                 seconds_todo = (args.train_iterations - step) * elapsed_time
                 log.info('iter:{:6d}, loss: {:.3f}, '
-                         'batch-p@{}: {:.2%}, ETA: {} ({:.2f}s/it)'.format(
+                         ' ETA: {} ({:.2f}s/it)'.format(
                             step,
                             float(b_loss),
                             timedelta(seconds=int(seconds_todo)),
