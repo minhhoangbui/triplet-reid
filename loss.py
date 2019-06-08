@@ -296,7 +296,8 @@ def triplet_semihard_loss(labels, embeddings, margin=1.0):
         num_positives,
         name='triplet_semihard_loss')
 
-    return triplet_loss, pdist_matrix
+    return triplet_loss, pdist_matrix, mask_positives, adjacency_not
+
 
 def batch_semihard(embeddings, pids, margin, batch_precision_at_k=None):
     """Computes the batch-hard loss from https://arxiv.org/abs/1503.03832.
@@ -312,11 +313,40 @@ def batch_semihard(embeddings, pids, margin, batch_precision_at_k=None):
     Returns:
         A scalar which indicates the loss in this batch.
     """
+
+    #NOTE: To be clear, for each sample, given there are n positive samples, for each 
+    # positive sample, we choose the smallest negative sample. We filter one more time
+    # to check if the negative lie inside the margin. So for each anchor, there are at 
+    # most n triplets
+
+    embeddings = tf.nn.l2_normalize(embeddings, dim=0)
     with tf.name_scope("batch_semi_hard"):
-        loss = tf.contrib.losses.metric_learning.triplet_semihard_loss(pids, embeddings, margin)
+        loss, dists, pos_mask, neg_mask = triplet_semihard_loss(pids, embeddings, margin)
 
     if batch_precision_at_k is None:
         return loss
+    
+    with tf.name_scope("monitoring"):
+        _, indices = tf.nn.top_k(-dists, k=batch_precision_at_k+1)
+
+        indices = indices[:, 1:]
+
+        batch_index = tf.tile(
+            tf.expand_dims(tf.range(tf.shape(indices)[0]), 1),
+            (1, tf.shape(indices)[1])
+        )
+        topk_indices = tf.stack((batch_index, indices), -1)
+
+        topk_is_same = tf.gather_nd(pos_mask, topk_indices)
+
+        topk_is_same_f32 = tf.cast(topk_is_same, tf.float32)
+        top1 = tf.reduce_mean(topk_is_same_f32[:, 0])
+        prec_at_k = tf.reduce_mean(topk_is_same_f32)
+
+        negative_dists = tf.boolean_mask(dists, pos_mask)
+        positive_dists = tf.boolean_mask(dists, neg_mask)
+
+    return loss, top1, prec_at_k, dists, negative_dists, positive_dists
 
 
 LOSS_CHOICES = {

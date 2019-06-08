@@ -16,7 +16,7 @@ INIT_CHECKPT=$1 ; shift
 EXP_ROOT=$1 ; shift
 
 python train.py \
-    --train_set data/market1501_train.csv \
+    --train_set /mnt/hdd3tb/Users/phai/data/Market-1501-v15.09.15/market1501_train.csv \
     --model_name mobilenet_v1_1_224 \
     --image_root $IMAGE_ROOT \
     --initial_checkpoint $INIT_CHECKPT \
@@ -28,10 +28,10 @@ python train.py \
     --batch_k 4 \
     --pre_crop_height 288 --pre_crop_width 144 \
     --net_input_height 256 --net_input_width 128 \
-    --margin soft \
+    --margin 0.6 \
     --metric euclidean \
-    --loss batch_hard \
+    --loss batch_semihard \
     --learning_rate 3e-4 \
     --train_iterations 25000 \
-    --decay_start_iteration 15000 \
+    --decay_start_iteration 10000 \
     "$@"
