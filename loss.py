@@ -319,7 +319,6 @@ def batch_semihard(embeddings, pids, margin, batch_precision_at_k=None):
     # to check if the negative lie inside the margin. So for each anchor, there are at 
     # most n triplets
 
-    embeddings = tf.nn.l2_normalize(embeddings, dim=0)
     with tf.name_scope("batch_semi_hard"):
         loss, dists, pos_mask, neg_mask = triplet_semihard_loss(pids, embeddings, margin)
 

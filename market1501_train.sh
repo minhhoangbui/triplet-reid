@@ -23,6 +23,7 @@ python train.py \
     --experiment_root $EXP_ROOT \
     --flip_augment \
     --crop_augment \
+    --head_name fc1024_normalize \
     --embedding_dim 128 \
     --batch_p 18 \
     --batch_k 4 \
