@@ -1,63 +1,46 @@
 import numbers
 import tensorflow as tf
+from tensorflow.python.ops import array_ops, math_ops
 
-
-def all_diffs(a, b):
-    """ Returns a tensor of all combinations of a - b.
-
+def pairwise_distance(feature, squared=False):
+    """Computes the pairwise distance matrix with numerical stability.
+    output[i, j] = || feature[i, :] - feature[j, :] ||_2
     Args:
-        a (2D tensor): A batch of vectors shaped (B1, F).
-        b (2D tensor): A batch of vectors shaped (B2, F).
-
+        feature: 2-D Tensor of size [number of data, feature dimension].
+        squared: Boolean, whether or not to square the pairwise distances.
     Returns:
-        The matrix of all pairwise differences between all vectors in `a` and in
-        `b`, will be of shape (B1, B2).
-
-    Note:
-        For convenience, if either `a` or `b` is a `Distribution` object, its
-        mean is used.
+        pairwise_distances: 2-D Tensor of size [number of data, number of data].
     """
-    return tf.expand_dims(a, axis=1) - tf.expand_dims(b, axis=0)
+    pairwise_distances_squared = math_ops.add(
+        math_ops.reduce_sum(math_ops.square(feature), axis=[1], keepdims=True),
+        math_ops.reduce_sum(
+            math_ops.square(array_ops.transpose(feature)),
+            axis=[0],
+            keepdims=True)) - 2.0 * math_ops.matmul(feature,
+                                                    array_ops.transpose(feature))
 
+    # Deal with numerical inaccuracies. Set small negatives to zero.
+    pairwise_distances_squared = math_ops.maximum(pairwise_distances_squared, 0.0)
+    # Get the mask where the zero distances are at.
+    error_mask = math_ops.less_equal(pairwise_distances_squared, 0.0)
 
-def cdist(a, b, metric='euclidean'):
-    """Similar to scipy.spatial's cdist, but symbolic.
+    # Optionally take the sqrt.
+    if squared:
+        pairwise_distances = pairwise_distances_squared
+    else:
+        pairwise_distances = math_ops.sqrt(
+            pairwise_distances_squared + math_ops.to_float(error_mask) * 1e-16)
 
-    The currently supported metrics can be listed as `cdist.supported_metrics` and are:
-        - 'euclidean', although with a fudge-factor epsilon.
-        - 'sqeuclidean', the squared euclidean.
-        - 'cityblock', the manhattan or L1 distance.
+    # Undo conditionally adding 1e-16.
+    pairwise_distances = math_ops.multiply(
+        pairwise_distances, math_ops.to_float(math_ops.logical_not(error_mask)))
 
-    Args:
-        a (2D tensor): The left-hand side, shaped (B1, F).
-        b (2D tensor): The right-hand side, shaped (B2, F).
-        metric (string): Which distance metric to use, see notes.
-
-    Returns:
-        The matrix of all pairwise distances between all vectors in `a` and in
-        `b`, will be of shape (B1, B2).
-
-    Note:
-        When a square root is taken (such as in the Euclidean case), a small
-        epsilon is added because the gradient of the square-root at zero is
-        undefined. Thus, it will never return exact zero in these cases.
-    """
-    with tf.name_scope("cdist"):
-        diffs = all_diffs(a, b)
-        if metric == 'sqeuclidean':
-            return tf.reduce_sum(tf.square(diffs), axis=-1)
-        elif metric == 'euclidean':
-            return tf.sqrt(tf.reduce_sum(tf.square(diffs), axis=-1) + 1e-12)
-        elif metric == 'cityblock':
-            return tf.reduce_sum(tf.abs(diffs), axis=-1)
-        else:
-            raise NotImplementedError(
-                'The following metric is not implemented by `cdist` yet: {}'.format(metric))
-cdist.supported_metrics = [
-    'euclidean',
-    'sqeuclidean',
-    'cityblock',
-]
+    num_data = array_ops.shape(feature)[0]
+    # Explicitly set diagonals to zero.
+    mask_offdiagonals = array_ops.ones_like(pairwise_distances) - array_ops.diag(
+        array_ops.ones([num_data]))
+    pairwise_distances = math_ops.multiply(pairwise_distances, mask_offdiagonals)
+    return pairwise_distances
 
 
 def get_at_indices(tensor, indices):

@@ -16,20 +16,20 @@ INIT_CHECKPT=$1 ; shift
 EXP_ROOT=$1 ; shift
 
 python train.py \
-    --train_set data/market1501_train.csv \
-    --model_name resnet_v1_50 \
+    --train_set /mnt/hdd3tb/Users/phai/data/Market-1501-v15.09.15/market1501_train.csv \
+    --model_name mobilenet_v1_1_224 \
     --image_root $IMAGE_ROOT \
     --initial_checkpoint $INIT_CHECKPT \
     --experiment_root $EXP_ROOT \
     --flip_augment \
     --crop_augment \
     --embedding_dim 128 \
+    --head_name fc1024_normalize \
     --batch_p 18 \
     --batch_k 4 \
     --pre_crop_height 288 --pre_crop_width 144 \
     --net_input_height 256 --net_input_width 128 \
-    --margin soft \
-    --metric euclidean \
+    --margin 0.6 \
     --loss batch_hard \
     --learning_rate 3e-4 \
     --train_iterations 25000 \
