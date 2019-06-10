@@ -30,7 +30,7 @@ python train.py \
     --pre_crop_height 288 --pre_crop_width 144 \
     --net_input_height 256 --net_input_width 128 \
     --margin 0.6 \
-    --loss batch_hard \
+    --loss batch_combined \
     --learning_rate 3e-4 \
     --train_iterations 25000 \
     --decay_start_iteration 15000 \

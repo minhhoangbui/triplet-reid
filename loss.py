@@ -3,6 +3,7 @@ import tensorflow as tf
 from tensorflow.python.ops import array_ops, math_ops
 from tensorflow.python.framework import dtypes
 
+
 def pairwise_distance(feature, squared=False):
     """Computes the pairwise distance matrix with numerical stability.
     output[i, j] = || feature[i, :] - feature[j, :] ||_2
@@ -50,7 +51,7 @@ def get_at_indices(tensor, indices):
     return tf.gather_nd(tensor, tf.stack((counter, indices), -1))
 
 
-def triplet_hardest_loss(pdist_matrix, pids, margin, batch_precision_at_k=None):
+def triplet_hardest_loss(pdist_matrix, pids, margin):
     """Computes the batch-hard loss from arxiv.org/abs/1703.07737.
 
     Args:
@@ -77,56 +78,18 @@ def triplet_hardest_loss(pdist_matrix, pids, margin, batch_precision_at_k=None):
         # Another way of achieving the same, though more hacky:
         # closest_negative = tf.reduce_min(dists + 1e5*tf.cast(same_identity_mask, tf.float32), axis=1)
 
-        diff = furthest_positive - closest_negative
+        losses = furthest_positive - closest_negative
         if isinstance(margin, numbers.Real):
-            diff = tf.maximum(diff + margin, 0.0)
+            losses = tf.maximum(losses + margin, 0.0)
         elif margin == 'soft':
-            diff = tf.nn.softplus(diff)
+            losses = tf.nn.softplus(losses)
         elif margin.lower() == 'none':
             pass
         else:
             raise NotImplementedError(
                 'The margin {} is not implemented in batch_hard'.format(margin))
 
-    if batch_precision_at_k is None:
-        return diff
-
-    # For monitoring, compute the within-batch top-1 accuracy and the
-    # within-batch precision-at-k, which is somewhat more expressive.
-    with tf.name_scope("monitoring"):
-        # This is like argsort along the last axis. Add one to K as we'll
-        # drop the diagonal.
-        _, indices = tf.nn.top_k(-pdist_matrix, k=batch_precision_at_k+1)
-
-        # Drop the diagonal (distance to self is always least).
-        indices = indices[:,1:]
-
-        # Generate the index indexing into the batch dimension.
-        # This is simething like [[0,0,0],[1,1,1],...,[B,B,B]]
-        batch_index = tf.tile(
-            tf.expand_dims(tf.range(tf.shape(indices)[0]), 1),
-            (1, tf.shape(indices)[1]))
-
-        # Stitch the above together with the argsort indices to get the
-        # indices of the top-k of each row.
-        topk_indices = tf.stack((batch_index, indices), -1)
-
-        # See if the topk belong to the same person as they should, or not.
-        topk_is_same = tf.gather_nd(same_identity_mask, topk_indices)
-
-        # All of the above could be reduced to the simpler following if k==1
-        #top1_is_same = get_at_indices(same_identity_mask, top_idxs[:,1])
-
-        topk_is_same_f32 = tf.cast(topk_is_same, tf.float32)
-        top1 = tf.reduce_mean(topk_is_same_f32[:,0])
-        prec_at_k = tf.reduce_mean(topk_is_same_f32)
-
-        # Finally, let's get some more info that can help in debugging while
-        # we're at it!
-        negative_dists = tf.boolean_mask(pdist_matrix, negative_mask)
-        positive_dists = tf.boolean_mask(pdist_matrix, positive_mask)
-
-        return diff, top1, prec_at_k, topk_is_same, negative_dists, positive_dists
+    return losses, positive_mask, negative_mask, same_identity_mask
 
 
 def masked_maximum(data, mask, dim=1):
@@ -161,6 +124,7 @@ def masked_minimum(data, mask, dim=1):
         math_ops.multiply(data - axis_maximums, mask), dim,
         keepdims=True) + axis_maximums
     return masked_minimums
+
 
 def triplet_semihard_loss(pdist_matrix, labels, margin=1.0):
     """Computes the triplet loss with semi-hard negative mining.
@@ -239,7 +203,7 @@ def triplet_semihard_loss(pdist_matrix, labels, margin=1.0):
     return triplet_loss, num_positives
 
 
-def batch_combined(embeddings, labels, margin, batch_precision_at_k=None):
+def batch_combined(pdist_mat, labels, margin, batch_precision_at_k=None):
     '''
     Computes the triplet loss with semi-hard negative mining and hardest negative mining.
     The loss encourages the positive distances (between a pair of embeddings with
@@ -251,27 +215,57 @@ def batch_combined(embeddings, labels, margin, batch_precision_at_k=None):
     Args:
         labels: 1-D tf.int32 `Tensor` with shape [batch_size] of
         multiclass integer labels.
-        embeddings: 2-D float `Tensor` of embedding vectors. Embeddings should
-        be l2 normalized.
+        pdist_mat: 2-D float `Tensor` of distance matrix
         margin: Float, margin term in the loss definition.
     Returns:
         triplet_loss: tf.float32 scalar.
     '''
 
-    pdist_mat = pairwise_distance(embeddings, squared=True)
-
-    hardest_losses = triplet_hardest_loss(pdist_matrix=pdist_mat, pids=labels, margin=margin)
+    hardest_losses, positive_mask, negative_mask, same_identity_mask = triplet_hardest_loss(pdist_matrix=pdist_mat,
+                                                                                            pids=labels, margin=margin)
 
     loss_mean, num_loss = triplet_semihard_loss(pdist_mat, labels, margin=margin)
 
-    average_loss = (tf.reduce_sum(hardest_losses) + loss_mean * num_loss) / (tf.size(hardest_loss) + num_loss)
+    hardest_size = math_ops.cast(tf.size(hardest_losses), dtype=dtypes.float32)
 
-    return average_loss
+    average_loss = (tf.reduce_sum(hardest_losses) + loss_mean * num_loss) / (hardest_size + num_loss)
 
+    with tf.name_scope("monitoring"):
+        # This is like argsort along the last axis. Add one to K as we'll
+        # drop the diagonal.
+        _, indices = tf.nn.top_k(-pdist_mat, k=batch_precision_at_k+1)
 
+        # Drop the diagonal (distance to self is always least).
+        indices = indices[:,1:]
+
+        # Generate the index indexing into the batch dimension.
+        # This is simething like [[0,0,0],[1,1,1],...,[B,B,B]]
+        batch_index = tf.tile(
+            tf.expand_dims(tf.range(tf.shape(indices)[0]), 1),
+            (1, tf.shape(indices)[1]))
+
+        # Stitch the above together with the argsort indices to get the
+        # indices of the top-k of each row.
+        topk_indices = tf.stack((batch_index, indices), -1)
+
+        # See if the topk belong to the same person as they should, or not.
+        topk_is_same = tf.gather_nd(same_identity_mask, topk_indices)
+
+        # All of the above could be reduced to the simpler following if k==1
+        #top1_is_same = get_at_indices(same_identity_mask, top_idxs[:,1])
+
+        topk_is_same_f32 = tf.cast(topk_is_same, tf.float32)
+        top1 = tf.reduce_mean(topk_is_same_f32[:,0])
+        prec_at_k = tf.reduce_mean(topk_is_same_f32)
+
+        # Finally, let's get some more info that can help in debugging while
+        # we're at it!
+        negative_dists = tf.boolean_mask(pdist_mat, negative_mask)
+        positive_dists = tf.boolean_mask(pdist_mat, positive_mask)
+
+    return average_loss, top1, prec_at_k, topk_is_same, negative_dists, positive_dists
 
 
 LOSS_CHOICES = {
     'batch_combined': batch_combined,
-    'batch_hard': triplet_hardest_loss,
 }
