@@ -155,7 +155,7 @@ def triplet_semihard_loss(labels, embeddings, margin=1.0):
         num_positives,
         name='triplet_semihard_loss')
 
-    return triplet_loss, pdist_matrix, mask_positives, adjacency_not
+    return triplet_loss, pdist_matrix, mask_positives, adjacency_not, adjacency
 
 
 def batch_semihard(embeddings, pids, margin, batch_precision_at_k=None):
@@ -179,7 +179,7 @@ def batch_semihard(embeddings, pids, margin, batch_precision_at_k=None):
     # most n triplets
 
     with tf.name_scope("batch_semi_hard"):
-        loss, dists, pos_mask, neg_mask = triplet_semihard_loss(pids, embeddings, margin)
+        loss, dists, pos_mask, neg_mask, same_identity_mask = triplet_semihard_loss(pids, embeddings, margin)
 
     if batch_precision_at_k is None:
         return loss
@@ -195,7 +195,7 @@ def batch_semihard(embeddings, pids, margin, batch_precision_at_k=None):
         )
         topk_indices = tf.stack((batch_index, indices), -1)
 
-        topk_is_same = tf.gather_nd(pos_mask, topk_indices)
+        topk_is_same = tf.gather_nd(same_identity_mask, topk_indices)
 
         topk_is_same_f32 = tf.cast(topk_is_same, tf.float32)
         top1 = tf.reduce_mean(topk_is_same_f32[:, 0])
