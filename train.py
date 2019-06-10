@@ -287,19 +287,13 @@ def main():
     with tf.name_scope('head'):
         endpoints = head.head(endpoints, args.embedding_dim, is_training=True)
 
-    # Create the loss in two steps:
+    # Create the average loss in two steps:
     # 1. Compute all pairwise distances according to the specified metric.
     # 2. For each anchor along the first dimension, compute its loss.
-    # dists = loss.cdist(endpoints['emb'], endpoints['emb'], metric=args.metric)
-    # losses, train_top1, prec_at_k, _, neg_dists, pos_dists = loss.LOSS_CHOICES[args.loss](
-    #     dists, pids, args.margin, batch_precision_at_k=args.batch_k-1)
+
     loss_mean, train_top1, prec_at_k, dists, neg_dists, pos_dists = loss.LOSS_CHOICES[args.loss](
         endpoints['emb'], pids, args.margin, batch_precision_at_k=args.batch_k - 1
     )
-
-    # Count the number of active entries, and compute the total batch loss.
-    # num_active = tf.reduce_sum(tf.cast(tf.greater(losses, 1e-5), tf.float32))
-    # loss_mean = tf.reduce_mean(losses)
 
     # Some logging for tensorboard.
     tf.summary.scalar('loss', loss_mean)
@@ -319,8 +313,8 @@ def main():
             os.path.join(args.experiment_root, 'embeddings'),
             dtype=np.float32, shape=(args.train_iterations, batch_size, args.embedding_dim))
         log_loss = lb.create_or_resize_dat(
-            os.path.join(args.experiment_root, 'losses'),
-            dtype=np.float32, shape=(args.train_iterations, batch_size))
+            os.path.join(args.experiment_root, 'loss'),
+            dtype=np.float32, shape=(args.train_iterations, ))
         log_fids = lb.create_or_resize_dat(
             os.path.join(args.experiment_root, 'fids'),
             dtype='S' + str(max_fid_len), shape=(args.train_iterations, batch_size))
